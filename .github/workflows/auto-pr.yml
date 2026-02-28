@@ -1,0 +1,47 @@
+name: CI + Auto PR
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: |
+          cd app
+          mvn clean install
+
+  create-pr:
+    if: startsWith(github.ref, 'refs/heads/feature/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh auth login --with-token <<< "${{ secrets.PAT_TOKEN }}"
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      - run: |
+          echo "Criando PR da branch ${{ github.ref_name }} para main"
+          gh pr create \
+            --base "main" \
+            --head "${{ github.ref_name }}" \
+            --title "Auto PR - ${{ github.ref_name }}" \
+            --body "PR criado automaticamente pelo workflow."
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
