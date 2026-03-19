@@ -9,7 +9,6 @@ import com.m_m.dxpgrowth.persistence.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -29,7 +28,6 @@ public class EvolutionService {
     private final GoalTypeRepository goalTypeRepository;
     private final GoalRepository goalRepository;
 
-    @Transactional
     public void registerAction(UUID usuarioId, EvolutionTrackingEntity.ActionType actionType,
                               UUID goalReferenceId, UUID goalTypeReferenceId, String description) {
         int xpEarned = actionType.getXpValue();
@@ -42,11 +40,10 @@ public class EvolutionService {
 
         summary.setXpTotal(newXpTotal);
         summary.setLevel(newLevel);
-        summary.setLastActivityDate(LocalDate.now());
 
         updateCounters(summary, actionType);
         updateStreak(summary);
-        summaryRepository.save(summary);
+        summary.setLastActivityDate(LocalDate.now());
 
         EvolutionTrackingEntity tracking = new EvolutionTrackingEntity();
         tracking.setUsuarioId(usuarioId);
@@ -63,6 +60,9 @@ public class EvolutionService {
             updateGoalTypeMetrics(usuarioId, goalTypeReferenceId);
         }
 
+        System.out.println("Saving summary");
+        summaryRepository.save(summary);
+
         log.info("Registrada ação {} para usuário {} - XP: {}, Total: {}, Level: {}",
                 actionType, usuarioId, xpEarned, newXpTotal, newLevel);
     }
@@ -70,6 +70,16 @@ public class EvolutionService {
     private UserEvolutionSummaryEntity createInitialSummary(UUID usuarioId) {
         UserEvolutionSummaryEntity summary = new UserEvolutionSummaryEntity();
         summary.setUsuarioId(usuarioId);
+        summary.setXpTotal(0);
+        summary.setLevel(1);
+        summary.setTotalGoalsCreated(0);
+        summary.setTotalGoalsCompleted(0);
+        summary.setTotalGoalsCancelled(0);
+        summary.setCurrentStreak(0);
+        summary.setLongestStreak(0);
+        summary.setGoalsCompletedToday(0);
+        summary.setGoalsCompletedThisWeek(0);
+        summary.setGoalsCompletedThisMonth(0);
         return summary;
     }
 
@@ -104,8 +114,21 @@ public class EvolutionService {
         }
 
         if (summary.getCurrentStreak() > 1 && summary.getCurrentStreak() % 7 == 0) {
-            registerAction(summary.getUsuarioId(), EvolutionTrackingEntity.ActionType.STREAK_BONUS,
-                    null, null, "Bônus por sequência de " + summary.getCurrentStreak() + " dias!");
+            int bonusXp = EvolutionTrackingEntity.ActionType.STREAK_BONUS.getXpValue();
+            summary.setXpTotal(summary.getXpTotal() + bonusXp);
+            summary.setLevel(UserEvolutionSummaryEntity.calculateLevel(summary.getXpTotal()));
+
+            EvolutionTrackingEntity tracking = new EvolutionTrackingEntity();
+            tracking.setUsuarioId(summary.getUsuarioId());
+            tracking.setActionType(EvolutionTrackingEntity.ActionType.STREAK_BONUS);
+            tracking.setXpEarned(bonusXp);
+            tracking.setXpTotal(summary.getXpTotal());
+            tracking.setLevel(summary.getLevel());
+            tracking.setDescription("Bônus por sequência de " + summary.getCurrentStreak() + " dias!");
+            trackingRepository.save(tracking);
+
+            log.info("Registrada ação STREAK_BONUS para usuário {} - XP: {}, Total: {}, Level: {}",
+                    summary.getUsuarioId(), bonusXp, summary.getXpTotal(), summary.getLevel());
         }
     }
 
