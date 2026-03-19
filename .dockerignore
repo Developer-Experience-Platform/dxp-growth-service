@@ -1,0 +1,12 @@
+**/.git
+**/.gitignore
+**/.mvn
+**/target
+**/*.md
+**/Dockerfile
+**/.dockerignore
+**/.github
+**/.idea
+**/HELP.md
+**/mvnw
+**/mvnw.cmd
